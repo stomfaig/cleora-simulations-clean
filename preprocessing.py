@@ -96,19 +96,6 @@ def calc_and_save(dataset_name, g): #if all other methods cal this one at some p
         ),
         adjacency_matrix
     )
-
-    print('Calcuating transformatin matrix.')
-    transformation_matrix = get_transformation_matrix(g.vcount())
-
-
-    print('Calculating transformed laplacian')
-
-    transformed_laplacian = torch.matmul(
-        torch.matmul(
-            transformation_matrix, discrete_laplacian_matrix
-        ),
-        torch.transpose(transformation_matrix, -1, 0)
-    )[:-1, :-1]
     
     graph_data = {
         'dataset_name' : dataset_name,
@@ -120,10 +107,7 @@ def calc_and_save(dataset_name, g): #if all other methods cal this one at some p
         'adjacency_matrix' : adjacency_matrix,
         'laplacian_matrix' : discrete_laplacian_matrix,
         'degree_matrix' : degree_matrix,
-        'random_walk_matrix' : random_walk_matrix,
-
-        'transformation_matrix' : transformation_matrix,
-        'transformed_laplacian' : transformed_laplacian
+        'random_walk_matrix' : random_walk_matrix
     }
 
     print("Saving graph data!")
@@ -136,7 +120,7 @@ def calc_and_save(dataset_name, g): #if all other methods cal this one at some p
 if __name__ == '__main__':
     def main():
 
-        planetoid_import('Cora')
+        planetoid_import('Pubmed')
 
         return 0
 

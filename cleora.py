@@ -28,7 +28,8 @@ class Cleora:
             for _ in range(self.iteration_num):
                 record.append(embedding)
                 
-                embedding = self.mult_by_rwm(embedding) #TODO can we make these manipulate the values?
+                #embedding = self.mult_by_rwm(embedding) #TODO can we make these manipulate the values?
+                embedding = self.mult_by_comp_ajacency(embedding)
                 if normalise:
                     embedding = self.normalise_rows(embedding)
 
@@ -44,6 +45,10 @@ class Cleora:
                 embedding
             ))
         )
+
+    def mult_by_comp_ajacency(self, embedding):
+        v = self.graph_data['vertex_count']
+        return torch.matmul(torch.ones(v, v) - torch.eye(v) - self.graph_data['adjacency_matrix'], embedding)
 
     def mult_by_rwm(self, embedding):
         return torch.matmul(self.graph_data['random_walk_matrix'], embedding)

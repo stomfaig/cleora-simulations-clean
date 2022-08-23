@@ -20,17 +20,15 @@ graph_data = {
 
     }"""
 
-def largest_evec(graph_data, evec_num, embedding_dim):
+def largest_evec(graph_data, evec_num):
+    laplacian_matrix = graph_data['laplacian_matrix']
+    _, evecs = torch.lobpcg(laplacian_matrix, k = evec_num, largest=True)
+    return evecs
 
-    O = graph_data['transformation_matrix']
-    T = graph_data['transformed_laplacian']
-
-    _, evecs = torch.lobpcg(T, k=evec_num, largest=True)
-
-    return torch.matmul(torch.transpose(O, 0, -1), torch.concat((evecs, torch.zeros(1, embedding_dim)), 0))
-
-def smallest_evec(graph_data):
-    Raise(NotImplementedError)
+def smallest_evec(graph_data, evec_num):
+    laplacian_matrix = graph_data['laplacian_matrix']
+    _, evecs = torch.lobpcg(laplacian_matrix, k = evec_num, largest=False)
+    return evecs
 
 def largest_evec_noise(graph_data, noise_dim, embedding_dim):
     Raise(NotImplementedError)

@@ -24,6 +24,27 @@ graph_data = {
         'laplacian_evecs' : laplacian_evecs
     }"""
 
+"""
+the columns of evecs has to be the eigenvectors of a chosen matrix
+"""
+
+
+
+def remove_frequencies(embedding, evecs):
+    O = torch.transpose(evecs, 0, 1)
+    non_normalised = embedding - torch.matmul(
+        torch.matmul(evecs, O),
+        embedding
+    )
+
+    return torch.stack(
+            list(map(
+                lambda r: r / torch.linalg.norm(r),
+                non_normalised
+            ))
+        )
+
+
 def processing(filename, iteration_num, embedding_dim):
 
     print('Importing.')
@@ -35,7 +56,7 @@ def processing(filename, iteration_num, embedding_dim):
         def __init__(self, graph_data, iteration_num, random_embedding_dim, embeddings=[]):
     """
     experiment = cleora.Cleora(graph_data, iteration_num, embedding_dim, [
-        largest_evec(graph_data, 100, embedding_dim)
+        largest_evec(graph_data, 100)
     ]) 
     data = experiment.run()
 
@@ -45,9 +66,9 @@ def processing(filename, iteration_num, embedding_dim):
         def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, testset_vertices=10000):
     """
 
-    link_prediction_metric = link_prediction.link_prediction_setup(graph_data, testset_edges=100, testset_vertices=2000)
+    link_prediction_metric = link_prediction.link_prediction_setup(graph_data, testset_edges=1000, testset_vertices=10000)
 
-
+    #exp_pre_processed = [remove_frequencies(data[0][i], smallest_evec(graph_data, 100)) for i in range(len(data[0]))]
     pure_processed = link_prediction_metric(data[0])
     exp_processed = link_prediction_metric(data[1])
 
@@ -60,6 +81,6 @@ if __name__ == '__main__':
     def main():
         filename = sys.argv[1]
 
-        return processing(filename, 10, 100)
+        return processing(filename, 5, 100)
 
     print(main())
