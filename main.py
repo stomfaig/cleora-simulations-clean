@@ -1,4 +1,3 @@
-from winreg import ExpandEnvironmentStrings
 import cleora
 import link_prediction
 import pickle
@@ -7,6 +6,7 @@ import numpy as np
 import torch
 import sys
 from embeddings import *
+import heat_kernel
 
 """ Structure of data:
 graph_data = {
@@ -24,56 +24,43 @@ graph_data = {
         'laplacian_evecs' : laplacian_evecs
     }"""
 
-"""
-the columns of evecs has to be the eigenvectors of a chosen matrix
-"""
-
-
-
-def remove_frequencies(embedding, evecs):
-    O = torch.transpose(evecs, 0, 1)
-    non_normalised = embedding - torch.matmul(
-        torch.matmul(evecs, O),
-        embedding
-    )
-
-    return torch.stack(
-            list(map(
-                lambda r: r / torch.linalg.norm(r),
-                non_normalised
-            ))
-        )
-
 
 def processing(filename, iteration_num, embedding_dim):
 
-    print('Importing.')
+    print('*) Importing.')
     graph_data = pickle.load( open('data/' + filename, "rb" ))
 
-    """
-        First we create data
-        cleora.Cleora constuctor:
-        def __init__(self, graph_data, iteration_num, random_embedding_dim, embeddings=[]):
-    """
+    print('*) Calculating eigenvecors')
+    largest_evec_init = largest_evec(graph_data, 100)
+
+    print('*) Running experiments.')
     experiment = cleora.Cleora(graph_data, iteration_num, embedding_dim, [
-        largest_evec(graph_data, 100)
+        largest_evec_init
     ]) 
     data = experiment.run()
 
+    """
+        H = heat_kernel.HeatKernel.pre_calculated_evecs(largest_evec_init)
+        heat_kernel_pure = [torch.matmul(H(i/10), largest_evec_init) for i in range(iteration_num)]
+    """
     
     """
         Link prediction metric setup:
         def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, testset_vertices=10000):
     """
 
-    link_prediction_metric = link_prediction.link_prediction_setup(graph_data, testset_edges=1000, testset_vertices=10000)
+    link_prediction_metric = link_prediction.link_prediction_setup(graph_data, testset_edges=100, testset_vertices=10000)
 
     #exp_pre_processed = [remove_frequencies(data[0][i], smallest_evec(graph_data, 100)) for i in range(len(data[0]))]
     pure_processed = link_prediction_metric(data[0])
     exp_processed = link_prediction_metric(data[1])
+    #min_processed = link_prediction_metric(data[2])
+    #heat_kernel_processed = link_prediction_metric(heat_kernel_pure)
 
     print(pure_processed)
     print(exp_processed)
+    #print(min_processed)
+    #print(heat_kernel_processed)
 
     return 0
 

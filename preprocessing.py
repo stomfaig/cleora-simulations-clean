@@ -79,16 +79,24 @@ def calc_and_save(dataset_name, g): #if all other methods cal this one at some p
     """
         get_adjacency() returns an igrapgh.Matrix type, from which we extract the data using the attribute .data
         laplacian() returns a 2d list, hence no need for extracting the data, since there is no wrapper.
+    
+
+        To speed up experiments, we want to pre-calculate as many things as we can. Hence, it wouldbe nice to have the 
+        complement of the graph also pre-calculated, but it seems like it takes up tons of space to store the complement of a large graph.
+        Proposed solution: 
     """
 
     print("Calculating adjacency matrix.")
     adjacency_matrix = torch.tensor(g.get_adjacency().data).type(torch.FloatTensor)
     print("Calculating laplacian matrix.")
     discrete_laplacian_matrix = torch.tensor(g.laplacian()).type(torch.FloatTensor)
+    
+    print("Calculating degree matrix")
     degree_matrix = torch.diagflat(
         torch.tensor(g.degree())
     ).type(torch.FloatTensor)
 
+    print("Calculating random walk matrix")
     random_walk_matrix = torch.matmul(
         torch.diagflat(
             torch.tensor(list(map(lambda d: float(1/d),
@@ -97,12 +105,12 @@ def calc_and_save(dataset_name, g): #if all other methods cal this one at some p
         adjacency_matrix
     )
     
+    print("loading data into dict")
     graph_data = {
         'dataset_name' : dataset_name,
 
         'vertex_count' : g.vcount(),
         'graph' : g,
-        'complement_graph' : g.complementer(loops = False),
 
         'adjacency_matrix' : adjacency_matrix,
         'laplacian_matrix' : discrete_laplacian_matrix,

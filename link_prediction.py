@@ -70,8 +70,7 @@ def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, tests
 
         print("Generating training data:")
         print("*) Complementing input graph")
-        comp = graph_data['complement_graph']
-
+        
         train_test_boundary = int(len(g.es) * train_ratio)
         edge_list = list(g.es)
         training_edges = edge_list[:train_test_boundary]
@@ -83,9 +82,17 @@ def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, tests
             )
             Y.append(1)
 
-            fake_edge = random.choice(comp.es)
+            fake_edge = (-1, -1)
+            while True:
+                x = random.randrange(0, len(g.vs))
+                y = random.randrange(0, len(g.vs))
+            
+                if (x != y) & (graph_data['adjacency_matrix'][x,y] != 1):
+                    fake_edge = (x, y)
+                    break
+
             X.append(
-                hadamard(fake_edge.source, fake_edge.target)
+                hadamard(fake_edge[0], fake_edge[1])
             )
             Y.append(0)
 

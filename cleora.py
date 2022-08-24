@@ -29,7 +29,7 @@ class Cleora:
                 record.append(embedding)
                 
                 #embedding = self.mult_by_rwm(embedding) #TODO can we make these manipulate the values?
-                embedding = self.mult_by_comp_ajacency(embedding)
+                embedding = self.mult_by_rwm(embedding)
                 if normalise:
                     embedding = self.normalise_rows(embedding)
 
