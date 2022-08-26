@@ -1,24 +1,36 @@
+from signal import raise_signal
 import torch
 import pickle
 import numpy as np
 
 
+"""
+Current usage:
+supply embeddings and a propagation matrix.
+returns an len(embeddings) long array, with each dimension containing the iterations on the corresponding embeding.
+
+
+future TODO:
+provide a propagation matrix for each embedding?
+"""
+
+def normalise_or(r):
+    norm = torch.linalg.norm(r)
+
+    if norm == 0:
+        return torch.zeros(len(r))
+    return r / norm
+
 class Cleora:
 
-    def __init__(self, graph_data, iteration_num, random_embedding_dim, embeddings=[]):
-        self.iteration_num = iteration_num
-        self.graph_data = graph_data
+    def __init__(self, iteration_num, embeddings=[], propagation_matrix = None):
         
-        random_embedding = torch.tensor([
-            [
-               np.random.uniform(-1, 1) for j in range(random_embedding_dim)
-            ] for i in range(graph_data['vertex_count'])
-        ]) 
+        if propagation_matrix is None:
+            raise ValueError('No propagation matrix provided.')
+        
+        self.iteration_num = iteration_num
         self.embeddings = embeddings
-        self.embeddings.insert(0, random_embedding) #TODO is there a more compact way?
-
-
-        return
+        self.propagator = self.get_progation_function(propagation_matrix)
 
     def run(self, normalise=True):
         records = []
@@ -28,8 +40,7 @@ class Cleora:
             for _ in range(self.iteration_num):
                 record.append(embedding)
                 
-                #embedding = self.mult_by_rwm(embedding) #TODO can we make these manipulate the values?
-                embedding = self.mult_by_rwm(embedding)
+                embedding = self.propagator(embedding)
                 if normalise:
                     embedding = self.normalise_rows(embedding)
 
@@ -41,17 +52,17 @@ class Cleora:
            
         return torch.stack(
             list(map(
-                lambda r: r / torch.linalg.norm(r),
+                normalise_or,
                 embedding
             ))
         )
 
-    def mult_by_comp_ajacency(self, embedding):
-        v = self.graph_data['vertex_count']
-        return torch.matmul(torch.ones(v, v) - torch.eye(v) - self.graph_data['adjacency_matrix'], embedding)
+    def get_progation_function(self, propagation_matrix=None):
 
-    def mult_by_rwm(self, embedding):
-        return torch.matmul(self.graph_data['random_walk_matrix'], embedding)
+        if propagation_matrix is None:
+            raise ValueError('No propagation matrix provided.')
 
-    def edge_wise_mult(self, embedding):
-        return
+        def propagate(embedding):
+            return torch.matmul(propagation_matrix, embedding) 
+
+        return propagate

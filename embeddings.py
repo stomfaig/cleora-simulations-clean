@@ -1,4 +1,5 @@
 from ast import Raise
+import re
 import torch
 from functools import cache
 
@@ -19,6 +20,11 @@ graph_data = {
     }
 
     }"""
+
+#make a random embedding generator.
+
+def random_embedding_generator(vertex_count, embedding_dim):
+    return (2 * torch.rand(vertex_count, embedding_dim) - 1)
 
 def largest_evec(graph_data, evec_num):
     laplacian_matrix = graph_data['laplacian_matrix']

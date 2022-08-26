@@ -39,15 +39,22 @@ def _hr10(positions):
     )) / float(len(positions))
 
 
-#TODO potentially refactor a bit more?
-#TODO either transform fully to torch or to numpy, since converting potentially leads to overheads...
-def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, testset_vertices=10000):
+"""
+    New signature: train_edges, test_edges, vertic_num, testset_vertices
+"""
 
+
+def link_prediction_setup(g, vs, vertex_count, training_edges, test_edges, testset_edges=1000, testset_vertices=10000):
+
+
+    """
+        For some reason, when trying to run this in multiprocessing, tons of memory gets used up.
+    """
     @vectorise
     def link_prediction(embedding):
 
         X = []; Y = []
-        g = graph_data['graph']
+        #g = graph_data['graph'] # Every instance has its own copy from the graph?
 
         """
             Since the hadamard prod is symmetric, we can save memory by caching in the same order always. May take some
@@ -68,26 +75,22 @@ def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, tests
                 sorted([i,j])
             ))
 
-        print("Generating training data:")
-        print("*) Complementing input graph")
-        
-        train_test_boundary = int(len(g.es) * train_ratio)
-        edge_list = list(g.es)
-        training_edges = edge_list[:train_test_boundary]
+        #print("Generating training data:")
+        #print("*) Complementing input graph")
 
-        print("*) Generating training data")
-        for e in tqdm(training_edges):
+        #print("*) Generating training data")
+        for e in training_edges:
             X.append(
-                hadamard(e.source, e.target)
+                hadamard(e[0], e[1])
             )
             Y.append(1)
 
             fake_edge = (-1, -1)
             while True:
-                x = random.randrange(0, len(g.vs))
-                y = random.randrange(0, len(g.vs))
+                x = random.randrange(0, vertex_count)
+                y = random.randrange(0, vertex_count)
             
-                if (x != y) & (graph_data['adjacency_matrix'][x,y] != 1):
+                if (x != y) & ((x, y) not in training_edges) & ((y, x) not in training_edges): #This could be solved more elegantly I think
                     fake_edge = (x, y)
                     break
 
@@ -101,7 +104,7 @@ def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, tests
         Logistic regression is only implemented in numpy by defautl, so either a torch implementation is needed, or a to-back conversion...
         """
 
-        print("*) Fitting Logistic Regression")
+        #print("*) Fitting Logistic Regression")
         clf = LogisticRegression(random_state=0).fit(X, Y)
 
         """
@@ -117,33 +120,24 @@ def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, tests
                 sorted([i,j])
             ))
 
-        print("Evaluating model:")
-        print("*) Sorting vertices")
-        vertices = list(
-            map(
-                lambda v: v.index,
-                sorted(
-                    g.vs,
-                    key=lambda v: v.degree()
-                )
-            )
-        )
+        #print("Evaluating model:")
+        #print("*) Sorting vertices")
 
         positions = []
-        test_edges = random.sample(
-            edge_list[train_test_boundary:],
+        selected_test_edges = random.sample(
+            test_edges,
             testset_edges
         )
 
-        print(clf.classes_)
+        #print(clf.classes_)
 
-        print("*) Evaluating on test edges")
-        for e in tqdm(test_edges):
-            source = e.source
-            target = e.target
+        #print("*) Evaluating on test edges")
+        for e in selected_test_edges:
+            source = e[0]
+            target = e[1]
 
-            neighbours = set(g.neighbors(source, mode="out")); 
-            most_popular_vertices = [vertices[-i - 1] for i in range(testset_vertices) if not vertices[-i - 1] in neighbours] 
+            neighbours = set(g.neighbors(source, mode="out"))
+            most_popular_vertices = [vs[-i - 1] for i in range(testset_vertices) if not vs[-i - 1] in neighbours]
         
             original = prediction(source, target)
 
@@ -154,7 +148,7 @@ def link_prediction_setup(graph_data, train_ratio=0.8, testset_edges=1000, tests
 
             positions.append(position)
             
-        print("*) Calculating metrics")
+        #print("*) Calculating metrics")
         return [_mrr(positions), _hr10(positions)]
 
     return link_prediction
