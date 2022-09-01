@@ -23,6 +23,26 @@ def normalise_or(r):
 
 class Cleora:
 
+    def instant_run(iteration_num, embeddings, propagation_matrix):
+        records = []
+
+        for embedding in embeddings:
+            record = []
+            for _ in range(iteration_num):
+                record.append(embedding)
+                
+                embedding = torch.matmul(propagation_matrix, embedding)
+                embedding = torch.stack(
+                    list(map(
+                        normalise_or,
+                        embedding
+                    ))
+                )
+
+            records.append(record)
+
+        return records
+
     def __init__(self, iteration_num, embeddings=[], propagation_matrix = None):
         
         if propagation_matrix is None:

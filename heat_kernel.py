@@ -14,30 +14,44 @@ class HeatKernel:
         Want to be able to init this with the vectors already
     """
 
-    def __init__(self, graph_data, evec_count=100):
-
-        """
-        The sampling here might need to be different.
-        """
-
-        self.graph_data = graph_data
-        self.evals, self.evecs = torch.lobpcg(graph_data['laplacian_matrix'], k=evec_count, largest=True)
-        self.evecs = torch.transpose(self.evecs, 0, 1)
-        self.outer_pruducts = [torch.outer(evec, evec) for evec in self.evecs]
-
-        
-
-    @classmethod
-    def pre_calculated_evecs(self, evecs):
-        self.evecs = torch.transpose(self.evecs, 0, 1)
-        self.outer_pruducts = [torch.outer(evec, evec) for evec in self.evecs]
+    def __init__(self, evals, evecs):
+        self.evals = evals
+        self.evecs = torch.transpose(evecs, 0, 1)
+        self.outer_pruducts = [torch.outer(evec, evec) for evec in self.evecs]    
 
     def __call__(self, t = 1):
         
-        sum = torch.zeros(self.graph_data['vertex_count'], self.graph_data['vertex_count']) 
+        n = self.evecs.shape[1] # Since it was transposed.
+        
+        sum = torch.eye(n, n) 
 
         # self.evals is not a list tho...?
         for (i, outer) in enumerate(self.outer_pruducts):
-            sum += math.e ** ((-1) * self.evals[i] * t) * outer
+            sum += ( abs(self.evals[i]) ** float(t) - 1) * outer # can leave the reals.
+        return sum
+
+class ContinuousMatrix:
+
+    def __init__(self, f, evals, evecs):
+        self.f = f
+        self.evals = evals
+        self.evecs = torch.transpose(evecs, 0, 1)
+        self.outer_products = [torch.outer(evec, evec) for evec in self.evecs]
+    
+    def __call__(self, t = 1):
+        n = self.evecs.shape[1]
+
+        sum = torch.eye(n, n).type(torch.complex64)
+        for (i, outer) in enumerate(self.outer_products):
+            sum += (self.f(t, self.evals[i].type(torch.complex64)) - 1) * outer.type(torch.complex64)
 
         return sum
+
+class DeformedLaplacianMatrix:
+
+    def __init__(self, discrete_laplacian, adjacency_matrix):
+        self.discrete_laplacian = discrete_laplacian
+        self.adjacency_matrix = adjacency_matrix
+
+    def __call__(self, r=1):
+        return self.discrete_laplacian - (r-1) * self.adjacency_matrix

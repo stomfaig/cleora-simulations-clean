@@ -1,26 +1,13 @@
-from wsgiref.util import request_uri
-import cleora
 import torch
-from functools import cache
-from tqdm import tqdm
 import random
-from sklearn.linear_model import LogisticRegression
 import numpy as np
+import igraph as ig
+from functools import cache
+from sklearn.linear_model import LogisticRegression
 
-def vectorise(f):
 
-    def inner(data):
-        results = []
-
-        if isinstance(data, list):
-            for elem in data:
-                results.append(f(elem))
-        else:
-            results.append(f(data))
-        return results
-    
-    return inner
-        
+def flatten(complex_list):
+    return np.concatenate((complex_list.real, complex_list.imag), 0).astype(np.float32)
 
 def _mrr(positions):
     return sum(list(
@@ -38,106 +25,86 @@ def _hr10(positions):
         ) 
     )) / float(len(positions))
 
+def link_prediction_setup(vertex_count, edges, train_ratio=0.8, test_edges_num=100, test_vertices=1000):
 
-"""
-    New signature: train_edges, test_edges, vertic_num, testset_vertices
-"""
+    index = int(train_ratio * len(edges))
+    random.shuffle(edges)
+    train_edges = set(edges[:index])
+    free_edges = edges[index:] # in reality this is sampled twice for fake and for eval edges
+
+    fake_edges = []
+    for _ in range(len(train_edges)):
+        (x, y) = (-1, -1)
+        while(((x,y) in train_edges) or ((y, x) in train_edges) or (x == y)):
+            x = random.randint(0, vertex_count)
+            y = random.randint(0, vertex_count)
+        fake_edges.append((x,y))
+
+    test_edges = random.sample(
+        free_edges,
+        test_edges_num
+    )
+
+    g = ig.Graph()
+    g.add_vertices(vertex_count + 1)
+    g.add_edges(train_edges)
+
+    vs = list(
+        map(
+            lambda v: v.index,
+            sorted(
+                g.vs, 
+                key=lambda v: v.degree()
+            )
+        )
+    )
+    
 
 
-def link_prediction_setup(g, vs, vertex_count, training_edges, test_edges, testset_edges=1000, testset_vertices=10000):
-
-
-    """
-        For some reason, when trying to run this in multiprocessing, tons of memory gets used up.
-    """
-    @vectorise
-    def link_prediction(embedding):
+    def link_prediction(embedding): # rewrite to work for multiple embeddings at the same time.
 
         X = []; Y = []
-        #g = graph_data['graph'] # Every instance has its own copy from the graph?
-
-        """
-            Since the hadamard prod is symmetric, we can save memory by caching in the same order always. May take some
-            extratime 'cause of the two function calls.
-        """
         
         @cache
         def hadamard_calc(l):
             i, j = l
             return torch.multiply(embedding[i], embedding[j]).numpy()
 
-
-        """
-            We need this complicated structure because we can only hash tuples, but it has to be sorted to save space.
-        """
         def hadamard(i, j):
-            return hadamard_calc(tuple(
+            return flatten(hadamard_calc(tuple(
                 sorted([i,j])
-            ))
+            )))
 
-        #print("Generating training data:")
-        #print("*) Complementing input graph")
-
-        #print("*) Generating training data")
-        for e in training_edges:
+        for (real_edge, fake_edge) in zip(train_edges, fake_edges):
             X.append(
-                hadamard(e[0], e[1])
+                hadamard(real_edge[0], fake_edge[1])
             )
             Y.append(1)
-
-            fake_edge = (-1, -1)
-            while True:
-                x = random.randrange(0, vertex_count)
-                y = random.randrange(0, vertex_count)
-            
-                if (x != y) & ((x, y) not in training_edges) & ((y, x) not in training_edges): #This could be solved more elegantly I think
-                    fake_edge = (x, y)
-                    break
 
             X.append(
                 hadamard(fake_edge[0], fake_edge[1])
             )
             Y.append(0)
 
+            clf = LogisticRegression().fit(X, Y)
 
-        """
-        Logistic regression is only implemented in numpy by defautl, so either a torch implementation is needed, or a to-back conversion...
-        """
-
-        #print("*) Fitting Logistic Regression")
-        clf = LogisticRegression(random_state=0).fit(X, Y)
-
-        """
-            For the same reason as above we first sort and then cache. This comes with much smaller improvement, since we were cahing only a number,
-            but may cause a performance overhead, so might change it back.
-        """
         @cache
         def prediction_calc(l):
-            return clf.predict_proba([hadamard_calc(l)])[0][1]
+            return clf.predict_proba([flatten(hadamard_calc(l))])[0][1]
 
         def prediction(i, j):
             return prediction_calc(tuple(
                 sorted([i,j])
             ))
 
-        #print("Evaluating model:")
-        #print("*) Sorting vertices")
-
         positions = []
-        selected_test_edges = random.sample(
-            test_edges,
-            testset_edges
-        )
 
-        #print(clf.classes_)
-
-        #print("*) Evaluating on test edges")
-        for e in selected_test_edges:
+        for e in test_edges:
             source = e[0]
             target = e[1]
 
             neighbours = set(g.neighbors(source, mode="out"))
-            most_popular_vertices = [vs[-i - 1] for i in range(testset_vertices) if not vs[-i - 1] in neighbours]
+            most_popular_vertices = [vs[-i - 1] for i in range(test_vertices) if not vs[-i - 1] in neighbours]
         
             original = prediction(source, target)
 
@@ -148,8 +115,7 @@ def link_prediction_setup(g, vs, vertex_count, training_edges, test_edges, tests
 
             positions.append(position)
             
-        #print("*) Calculating metrics")
         return [_mrr(positions), _hr10(positions)]
 
-    return link_prediction
+    return (g, link_prediction)
 
